@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import ChatbotLauncher from './components/chatbot/ChatbotLauncher';
 import { useRoutesConfig } from './routes/routes-config';
 import { usePlugins } from './plugins/PluginLoader';
 import LoadingFallback from './components/LoadingFallback';
@@ -40,7 +41,12 @@ const App: React.FC = () => {
     return <LoadingFallback message="Loading plugins..." size="medium" />;
   }
 
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <RouterProvider router={router} />
+      <ChatbotLauncher />
+    </>
+  );
 };
 
 export default App;

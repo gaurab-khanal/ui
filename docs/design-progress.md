@@ -268,4 +268,27 @@ This section covers foundational analysis and planning to improve the structure,
 > **Discover how organizations leverage KubeStellar for their multi-cluster needs.**
 - Designed to highlight **real-world applications** of KubeStellar with concise, impactful cards that visually connect use cases to features.
 
+### ✨ KubeStellar/docs Landing Page Design – Get Started Section
+
+> **Kickstart your journey with KubeStellar.**
+- **🚀 Quick Installation** – Set up in minutes  
+- **💬 Join Community** – Connect with developers  
+- **📚 Explore Docs** – Browse guides and references
+
+### 📞 KubeStellar/docs Landing Page Design – Get in Touch Section
+
+> **Have questions about KubeStellar? We're here to help!**
+- Simple, approachable section encouraging user engagement.
+- **Includes**:
+  - Brief message with supportive tone
+  - Two clear CTAs:
+    - **💬 Join Our Slack** – Real-time help & discussions
+    - **📧 Contact Us** – Reach out via email or form
+
+### 📞 KubeStellar/docs Landing Page Design – Footer
+
+Redesigned the footer to enhance usability and user engagement:
+- ⚓️ **Quick Navigation**: Added streamlined links to key sections (Home, Docs, Community, GitHub, etc)
+- 📬 **Stay Updated**: Integrated a simple email input for newsletter subscriptions
+
 ---
