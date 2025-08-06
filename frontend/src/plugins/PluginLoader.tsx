@@ -139,7 +139,7 @@ export const PluginProvider: React.FC<PluginProviderProps> = ({ children }) => {
         throw error;
       }
     },
-    [plugins, theme]
+    [plugins]
   );
 
   const loadAvailablePlugins = useCallback(async () => {
