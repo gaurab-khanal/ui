@@ -47,7 +47,7 @@ export const PluginProvider: React.FC<PluginProviderProps> = ({ children }) => {
     async (manifest: PluginManifest) => {
       try {
         // // Check if plugin is already loaded
-        if (isPluginLoaded(manifest.id)) {
+        if (plugins.has(manifest.id)) {
           console.warn(`Plugin ${manifest.metadata.name} is already loaded`);
           return;
         }
@@ -95,7 +95,15 @@ export const PluginProvider: React.FC<PluginProviderProps> = ({ children }) => {
                 ),
               };
 
-              setPluginRoutes(prev => [...prev, pluginRoute]);
+              setPluginRoutes(prev => {
+                const exists = prev.some(route => route.path === pluginRoute.path);
+                if (exists) {
+                  console.warn(`Plugin route already exists: ${pluginRoute.path}`);
+                  return prev;
+                }
+                const routes = [...prev, pluginRoute];
+                return routes;
+              });
 
               return {
                 isLink: true,
@@ -213,7 +221,7 @@ export const PluginProvider: React.FC<PluginProviderProps> = ({ children }) => {
       const blob = new Blob([res.data], { type: 'application/javascript' });
       const url = URL.createObjectURL(blob);
 
-      const module = await import(url);
+      const module = await import(/* @vite-ignore */ url);
 
       return module.default;
     } catch (error) {
