@@ -221,8 +221,8 @@ func CheckInstalledPluginWithID(pluginID int) (bool, error) {
 	query := `
 		SELECT EXISTS (
 			SELECT 1 FROM installed_plugins
-			WHERE id=$1
-		) 
+			WHERE plugin_details_id=$1
+		)
 	`
 
 	var exist bool
@@ -285,7 +285,7 @@ func UpdateInstalledPluginInstalledPath(installedPluginID int, installedPath str
 	query := `
 		UPDATE installed_plugins
 		SET installed_path = $1
-		WHERE id = $2
+		WHERE plugin_details_id = $2
 	`
 
 	_, err := database.DB.Exec(query, installedPath, installedPluginID)
@@ -321,7 +321,7 @@ func UpdatePluginStatusDB(pluginID int, status string, userID int) error {
 	query := `
 		UPDATE installed_plugins
 		SET status = $1
-		WHERE id = $2 AND user_id = $3
+		WHERE plugin_details_id = $2 AND user_id = $3
 	`
 
 	_, err := database.DB.Exec(query, status, pluginID, userID)
