@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/kubestellar/ui/backend/log"
+	"github.com/kubestellar/ui/backend/marketplace"
 	"github.com/kubestellar/ui/backend/models"
 	pkg "github.com/kubestellar/ui/backend/pkg/plugins"
 
@@ -68,7 +69,7 @@ var (
 	systemConfigMutex = sync.RWMutex{}
 
 	// Plugin feedback storage
-	pluginFeedbacks = make([]PluginFeedback, 0)
+	pluginFeedbacks = make([]models.PluginFeedback, 0)
 	feedbackMutex   = sync.RWMutex{}
 )
 
@@ -108,12 +109,13 @@ type PluginSystemConfig struct {
 
 // PluginFeedback represents user feedback for a plugin
 type PluginFeedback struct {
-	PluginID  int       `json:"pluginId" binding:"required"`
-	Rating    float32   `json:"rating" binding:"required,min=0,max=5"`
-	Comments  string    `json:"comments"`
-	UserID    string    `json:"userId,omitempty"`
-	UserEmail string    `json:"userEmail,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	PluginID    int       `json:"pluginId"`
+	Rating      int       `json:"rating" binding:"required,min=0,max=5"`
+	Comment     string    `json:"comment"`
+	Suggestions string    `json:"suggestions"`
+	UserID      int       `json:"userId,omitempty"`
+	UserEmail   string    `json:"userEmail,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 type PluginManifestWithID struct {
@@ -342,7 +344,6 @@ func InstallPluginHandler(c *gin.Context) {
 
 	// plugin not existed - add to database and retrieve the ID
 
-	var pluginID int
 	var pluginDetailsID int
 
 	// upload plugin details to plugin_details table for the 1st time
@@ -378,7 +379,7 @@ func InstallPluginHandler(c *gin.Context) {
 			return
 		}
 		elapsed := int(time.Since(start).Seconds())
-		pluginID, err = pkg.AddInstalledPluginToDB(pluginDetailsID, nil, userIDInt, "manual", true, "loading", "/plugins", elapsed)
+		_, err = pkg.AddInstalledPluginToDB(pluginDetailsID, nil, userIDInt, "manual", true, "loading", "/plugins", elapsed)
 		if err != nil {
 			log.LogError("Failed to add plugin to installed_plugins table", zap.Error(err))
 		}
@@ -392,7 +393,7 @@ func InstallPluginHandler(c *gin.Context) {
 			return
 		}
 		elapsed := int(time.Since(start).Seconds())
-		pluginID, err = pkg.AddInstalledPluginToDB(pluginDetailsID, nil, userIDInt, "manual", true, "loading", "/plugins", elapsed)
+		_, err = pkg.AddInstalledPluginToDB(pluginDetailsID, nil, userIDInt, "manual", true, "loading", "/plugins", elapsed)
 		if err != nil {
 			log.LogError("Failed to add plugin to installed_plugins table", zap.Error(err))
 		}
@@ -413,7 +414,7 @@ func InstallPluginHandler(c *gin.Context) {
 	}
 
 	// combine the plugin name and the ID to make it readable and unique for plugin's Folder
-	pluginKey := fmt.Sprintf("%s-%d", manifest.Metadata.Name, pluginID) // e.g. myplugin-123 // TODO: use pluginDetailsID instead of pluginID
+	pluginKey := fmt.Sprintf("%s-%d", manifest.Metadata.Name, pluginDetailsID) // e.g. myplugin-123 // TODO: use pluginDetailsID instead of pluginID
 
 	// Create plugin directory in plugins folder
 	pluginDir := filepath.Join("./plugins", pluginKey)
@@ -425,7 +426,7 @@ func InstallPluginHandler(c *gin.Context) {
 		return
 	}
 
-	err = pkg.UpdateInstalledPluginInstalledPath(pluginID, pluginDir)
+	err = pkg.UpdateInstalledPluginInstalledPath(pluginDetailsID, pluginDir)
 	if err != nil {
 		log.LogError("Failed to update installed plugin installed path", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -477,11 +478,11 @@ func InstallPluginHandler(c *gin.Context) {
 		// Load the plugin from the recent created folder
 
 		if err := pluginRegistry.LoadPlugin(pluginKey); err != nil {
-			err := pkg.UpdatePluginStatusDB(pluginID, "active", userIDInt)
+			err := pkg.UpdatePluginStatusDB(pluginDetailsID, "active", userIDInt)
 			if err != nil {
 				log.LogError("Failed to update plugin status", zap.Error(err))
 			}
-			err = pluginManager.EnablePlugin(pluginID, userIDInt)
+			err = pluginManager.EnablePlugin(pluginDetailsID, userIDInt)
 			if err != nil {
 				log.LogError("Failed to enable plugin", zap.Error(err))
 			}
@@ -494,7 +495,7 @@ func InstallPluginHandler(c *gin.Context) {
 				zap.String("name", manifest.Metadata.Name),
 				zap.String("version", manifest.Metadata.Version),
 				zap.String("path", pluginDir),
-				zap.Int("id", pluginID))
+				zap.Int("id", pluginDetailsID))
 
 			// Return success for installation but warn about loading failure
 			c.JSON(http.StatusOK, gin.H{
@@ -512,11 +513,11 @@ func InstallPluginHandler(c *gin.Context) {
 			log.LogError("Failed to update plugin status", zap.Error(err))
 		}
 
-		err := pkg.UpdatePluginStatusDB(pluginID, "active", userIDInt)
+		err := pkg.UpdatePluginStatusDB(pluginDetailsID, "active", userIDInt)
 		if err != nil {
 			log.LogError("Failed to update plugin status", zap.Error(err))
 		}
-		err = pluginManager.EnablePlugin(pluginID, userIDInt)
+		err = pluginManager.EnablePlugin(pluginDetailsID, userIDInt)
 		if err != nil {
 			log.LogError("Failed to enable plugin", zap.Error(err))
 		}
@@ -1011,39 +1012,114 @@ func UpdatePluginSystemConfigHandler(c *gin.Context) {
 
 // SubmitPluginFeedbackHandler handles feedback submission for plugins
 func SubmitPluginFeedbackHandler(c *gin.Context) {
-	var feedback PluginFeedback
+	pluginIDParam := c.Param("id")
+	pluginID, err := strconv.Atoi(pluginIDParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   fmt.Sprintf("Invalid plugin ID: %s", pluginIDParam),
+			"details": err.Error(),
+		})
+		log.LogError(
+			"Invalid plugin ID",
+			zap.String("pluginID", pluginIDParam),
+			zap.String("error", err.Error()),
+		)
+		return
+	}
 
-	if err := c.ShouldBindJSON(&feedback); err != nil {
+	// get user ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "User not authenticated",
+		})
+		log.LogError("User not authenticated", zap.String("userID", userID.(string)))
+		return
+	}
+
+	var feedbackForm PluginFeedback
+
+	if err := c.ShouldBindJSON(&feedbackForm); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error": "Invalid feedback data: " + err.Error(),
 		})
 		return
 	}
 
+	feedbackForm.PluginID = pluginID
+	feedbackForm.UserID = userID.(int)
+
 	// Check if the plugin exists (enabled or disabled)
-	plugin := findPluginByID(feedback.PluginID)
-	var found bool = plugin != nil
+	plugin := findPluginByID(feedbackForm.PluginID)
+	var found bool = (plugin != nil)
 	if !found {
 		c.JSON(http.StatusNotFound, gin.H{
 			"error":    "Plugin not found",
-			"pluginId": feedback.PluginID,
+			"pluginId": feedbackForm.PluginID,
 		})
 		log.LogInfo("Plugin not found for feedback submission",
-			zap.String("pluginId", strconv.Itoa(feedback.PluginID)))
+			zap.String("pluginId", strconv.Itoa(feedbackForm.PluginID)))
 		return
 	}
 
 	// Set creation time
-	feedback.CreatedAt = time.Now()
+	feedbackForm.CreatedAt = time.Now()
+
+	feedback := models.PluginFeedback{
+		PluginID:    feedbackForm.PluginID,
+		UserID:      feedbackForm.UserID,
+		Rating:      feedbackForm.Rating,
+		Comment:     feedbackForm.Comment,
+		Suggestions: feedbackForm.Suggestions,
+		CreatedAt:   feedbackForm.CreatedAt,
+		UpdatedAt:   feedbackForm.CreatedAt,
+	}
 
 	// Store feedback
 	feedbackMutex.Lock()
 	pluginFeedbacks = append(pluginFeedbacks, feedback)
 	feedbackMutex.Unlock()
 
+	// check if the plugin is installed from the marketplace
+	exists, err = marketplace.CheckMarketplacePlugin(feedback.PluginID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("Error checking marketplace plugin: %v", err),
+		})
+		log.LogError(
+			"error checking marketplace plugin exists",
+			zap.Int("pluginID", feedback.PluginID),
+			zap.String("error", err.Error()),
+		)
+		return
+	}
+	if !exists {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":    "Plugin not found in marketplace",
+			"pluginId": feedback.PluginID,
+		})
+		log.LogInfo("Plugin not found in marketplace",
+			zap.String("pluginId", strconv.Itoa(feedback.PluginID)))
+		return
+	}
+
+	// add feedback
+	err = marketplace.AddMarketplacePluginFeedback(feedback.PluginID, &feedback)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": fmt.Sprintf("Error adding feedback to marketplace: %v", err),
+		})
+		log.LogError(
+			"error adding feedback to marketplace",
+			zap.Int("pluginID", feedback.PluginID),
+			zap.String("error", err.Error()),
+		)
+		return
+	}
+
 	log.LogInfo("Plugin feedback submitted",
 		zap.String("pluginId", strconv.Itoa(feedback.PluginID)),
-		zap.Float32("rating", feedback.Rating))
+		zap.Int("rating", feedback.Rating))
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message":  "Feedback submitted successfully",

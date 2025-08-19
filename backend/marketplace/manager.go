@@ -118,6 +118,11 @@ func NewMarketplaceManager(store StorageProvider) (*MarketplaceManager, error) {
 	}, nil
 }
 
+func (m *MarketplaceManager) CheckPluginExists(pluginID int) bool {
+	_, exists := m.plugins[pluginID]
+	return exists
+}
+
 func (m *MarketplaceManager) AddPlugin(plugin *MarketplacePlugin) error {
 	m.plugins[plugin.PluginDetailsID] = plugin
 	return nil
@@ -199,7 +204,7 @@ func (m *MarketplaceManager) GetAllPluginTags() []string {
 			tagsMap[tag] = struct{}{}
 		}
 	}
-	var tags []string
+	tags := make([]string, 0, len(tagsMap))
 	for tag := range tagsMap {
 		tags = append(tags, tag)
 	}

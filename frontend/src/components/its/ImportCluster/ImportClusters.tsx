@@ -202,6 +202,17 @@ const ImportClusters: React.FC<Props> = ({ activeOption, setActiveOption, onCanc
     'idle' | 'processing' | 'success' | 'failed'
   >('idle');
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
+
+  // Add effect to log onboarding status changes
+  useEffect(() => {
+    console.log('[ImportClusters] Onboarding status changed to:', onboardingStatus);
+    if (onboardingError) {
+      console.log('[ImportClusters] Onboarding error:', onboardingError);
+    }
+    if (onboardingStatus === 'success' || onboardingStatus === 'failed') {
+      setOnboardingStarted(false);
+    }
+  }, [onboardingStatus, onboardingError]);
   // Define colors first, before any styling objects that use it
   const colors: Colors = {
     primary: '#2f86ff',
@@ -383,17 +394,6 @@ const ImportClusters: React.FC<Props> = ({ activeOption, setActiveOption, onCanc
       });
 
       console.log('[DEBUG] Onboarding initiated successfully');
-
-      setTimeout(() => {
-        if (!manualCommand) {
-          setManualCommand({
-            clusterName: clusterName,
-            token: '',
-            command:
-              'Cluster onboarded successfully! The cluster is now being added to the platform.',
-          });
-        }
-      }, 5000);
     } catch (error) {
       console.error('[DEBUG] Cluster onboarding error details:', error);
       let errorMessage = 'An unknown error occurred.';
